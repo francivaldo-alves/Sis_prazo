@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta de Prazos | FastTrack</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-bg"></div>
+
+    <div class="app-wrapper">
+        <header class="top-nav">
+            <div class="logo">
+                <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                <span>Prazo<strong>Fast</strong></span>
+            </div>
+            <div id="status-indicator" class="status loading">
+                <span class="dot"></span>
+                <span class="text">Carregando base...</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="hero-section" id="hero-section">
+                <h1>Encontre a melhor rota</h1>
+                <p>Consulte prazos e dados do estabelecimento instantaneamente.</p>
+
+                <div class="search-box">
+                    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none"
+                        viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input type="text" id="search-input" placeholder="Aguardando base..." disabled autocomplete="off">
+                    <button class="btn-primary" id="btn-search">Buscar</button>
+                    <!-- <div class="shortcut">↵</div> -->
+                </div>
+
+                <div id="upload-fallback" class="upload-fallback hidden">
+                    <p>Não foi possível carregar o arquivo <strong>Base_cadastros_Unificada_Final.xlsx</strong>
+                        automaticamente.</p>
+                    <label for="file-input" class="btn-outline">Carregar Manualmente</label>
+                    <input type="file" id="file-input" accept=".xlsx, .xls, .csv" hidden />
+                </div>
+            </div>
+
+            <!-- Dashboard Results -->
+            <div class="dashboard" id="dashboard">
+                <div class="dashboard-header">
+                    <h2>Resultados da Busca</h2>
+                    <button class="btn-clear" id="btn-clear">Nova Busca</button>
+                </div>
+
+                <div class="estab-details-card mb-4" id="estab-details">
+                    <!-- Info of establishment injected here -->
+                </div>
+
+                <div class="grid">
+                    <div class="best-match-card" id="best-match-card">
+                        <!-- Injetado via JS -->
+                    </div>
+
+                    <div class="compare-card">
+                        <h3>Opções de Transporte</h3>
+                        <div class="table-container">
+                            <table id="results-table">
+                                <thead>
+                                    <tr>
+                                        <th>Transportadora</th>
+                                        <th>Prazo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Injetado -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
