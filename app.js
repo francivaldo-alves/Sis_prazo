@@ -33,7 +33,12 @@ const cidadesList = document.getElementById('cidades-list');
 
 function normalizeSearch(str) {
     if (!str) return "";
-    return String(str).toLowerCase().trim().replace(/[-.,]/g, '');
+    return String(str)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim()
+        .replace(/[-.,]/g, '');
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -183,7 +188,33 @@ function performSearch() {
 
     // Tratamento para Estabelecimentos
     if (currentTab === 'estabelecimentos') {
-        let match = data.find(row => normalizeSearch(row['CEP'] || row['cep']) === query);
+        // Primeiro tenta encontrar correspondência EXATA de Terminal ou CEP (para buscas curtas ex: '35')
+        let match = data.find(row => {
+            const cepRaw = getColValue(row, ['CEP', 'cep']);
+            const termRaw = getColValue(row, ['Terminal', 'terminal', 'Terminal ', 'TERMINAL']);
+
+            const cep = normalizeSearch(cepRaw);
+            const term = normalizeSearch(termRaw);
+
+            return (cep && cep === query) || (term && term === query);
+        });
+
+        // Se não achar exato, tenta correspondência parcial pelo nome ou parte do terminal
+        if (!match) {
+            match = data.find(row => {
+                const termRaw = getColValue(row, ['Terminal', 'terminal', 'Terminal ', 'TERMINAL']);
+                const nameRaw = getColValue(row, ['Nome', 'Razao Social', 'Estabelecimento']);
+
+                const term = normalizeSearch(termRaw);
+                const name = normalizeSearch(nameRaw);
+
+                if (term && term.includes(query)) return true;
+                if (name && name.includes(query)) return true;
+                return false;
+            });
+        }
+
+        // Em último caso, procura a query em qualquer coluna da linha
         if (!match) {
             match = data.find(row => {
                 for (let key in row) {
@@ -321,16 +352,83 @@ function renderEstablishmentInfo(row) {
     }
 
     if (tecnico && tecnico.toLowerCase() !== 'n/a') {
+        let techPhone = '';
+        let techDist = '';
+
+        // Try getting phone from DB 'tecnicos'
+        const techData = dbInfo['tecnicos']?.data || [];
+        const techMatch = techData.find(t => normalizeSearch(getColValue(t, ['TECNICO', 'Técnico', 'Tecnico'])) === normalizeSearch(tecnico));
+
+        if (techMatch) {
+            let phone = getColValue(techMatch, ['TELEFONE', 'Telefone', 'Celular']);
+            if (phone) {
+                let strPhone = String(phone).replace(/\D/g, '');
+                if (strPhone.length === 11) {
+                    techPhone = `(${strPhone.substring(0, 2)}) ${strPhone.substring(2, 7)}-${strPhone.substring(7)}`;
+                } else if (strPhone.length === 10) {
+                    techPhone = `(${strPhone.substring(0, 2)}) ${strPhone.substring(2, 6)}-${strPhone.substring(6)}`;
+                } else {
+                    techPhone = phone;
+                }
+            }
+        }
+
+        // Try getting dist from current row (usually columns like 'Distância', 'Distância (KM)')
+        // Or if it's named 'KM', 'KM Tecnico'
+        techDist = getColValue(row, ['DISTÂNCIA', 'Distância', 'Distancia', 'DISTÂNCIA (KM)', 'KM', 'KM TÉCNICO', 'KM TECNICO']);
+
+        // If not found in the same row, cross-reference with 'cidades' database!
+        if (!techDist) {
+            const estabCity = getColValue(row, ['Cidade', 'Municipio', 'CIDADE']);
+            const citiesData = dbInfo['cidades']?.data || [];
+            if (estabCity && citiesData.length > 0) {
+                // Find a match where the Technician Name and the Attended City match
+                const cityMatch = citiesData.find(c => {
+                    const cTech = getColValue(c, ['TÉCNICO', 'Técnico', 'Tecnico']);
+                    const cCity = getColValue(c, ['CIDADE ATENDIDA', 'Cidade Atendida', 'cidade atendida', 'Cidade']);
+
+                    return cTech && cCity &&
+                        normalizeSearch(cTech) === normalizeSearch(tecnico) &&
+                        normalizeSearch(cCity) === normalizeSearch(estabCity);
+                });
+
+                if (cityMatch) {
+                    techDist = getColValue(cityMatch, ['DISTÂNCIA (KM)', 'Distância']);
+                }
+            }
+        }
+
         highlightCards.innerHTML += `
-            <div class="highlight-card tech-card">
-                <div class="highlight-icon tech-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
+            <div class="highlight-card tech-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 1rem;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <div class="highlight-icon tech-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                    </div>
+                    <div class="highlight-content">
+                        <span class="label">Técnico Mais Próximo</span>
+                        <span class="val" style="font-size: 1.25rem;">${tecnico}</span>
+                    </div>
                 </div>
-                <div class="highlight-content">
-                    <span class="label">Técnico Mais Próximo</span>
-                    <span class="val">${tecnico}</span>
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: flex-start; margin-top: auto;">
+                    ${techDist ? `
+                    <span style="font-size: 0.85rem; background: rgba(99, 102, 241, 0.1); color: #818cf8; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(99, 102, 241, 0.2);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <strong>${techDist}km</strong>
+                    </span>` : ''}
+                    
+                    ${techPhone ? `
+                    <span style="font-size: 0.85rem; background: rgba(16, 185, 129, 0.1); color: #34d399; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(16, 185, 129, 0.2);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                        </svg>
+                        ${techPhone}
+                    </span>` : ''}
                 </div>
             </div>
         `;
@@ -350,8 +448,18 @@ function renderTecnicoInfo(row) {
     const uf = getColValue(row, ['ESTADO', 'UF']) || 'N/A';
     const regiao = getColValue(row, ['REGIÃO', 'Regiao']) || 'N/A';
 
-    const telefone = getColValue(row, ['TELEFONE']) || '';
+    const telefoneRaw = getColValue(row, ['TELEFONE']) || '';
     const cnpj = getColValue(row, ['CNPJ']) || '';
+
+    let telefone = telefoneRaw;
+    if (telefoneRaw) {
+        let strPhone = String(telefoneRaw).replace(/\D/g, '');
+        if (strPhone.length === 11) {
+            telefone = `(${strPhone.substring(0, 2)}) ${strPhone.substring(2, 7)}-${strPhone.substring(7)}`;
+        } else if (strPhone.length === 10) {
+            telefone = `(${strPhone.substring(0, 2)}) ${strPhone.substring(2, 6)}-${strPhone.substring(6)}`;
+        }
+    }
 
     estabDetailsCard.innerHTML = `
         <div class="estab-header">
@@ -380,16 +488,104 @@ function renderTecnicoInfo(row) {
     highlightCards.style.display = 'none';
 }
 
-function renderCidadesInfo(matches, query) {
+function renderCidadesInfo(rawMatches, query) {
+    let isTecnico = false;
+    let filteredMatches = [];
+
+    // Priorizamos buscar pelo nome do técnico (técnico pode ser pesquisa parcial)
+    const techMatches = rawMatches.filter(row => {
+        const val = getColValue(row, ['TÉCNICO', 'Técnico', 'Tecnico']);
+        return val && normalizeSearch(val).includes(query);
+    });
+
+    if (techMatches.length > 0) {
+        isTecnico = true;
+        filteredMatches = techMatches;
+    } else {
+        // Se não for técnico, filtra explicitamente para que a "Cidade Atendida" seja EXATAMENTE a pesquisada
+        filteredMatches = rawMatches.filter(row => {
+            const val = getColValue(row, ['CIDADE ATENDIDA', 'Cidade Atendida', 'cidade atendida', 'Cidade']);
+            return val && normalizeSearch(val) === query;
+        });
+
+        // Caso a busca por Cidade Atendida exata não retorne nada, tenta buscar por inclusão (comportamento original)
+        // Isso ajuda caso o usuário digite parte do nome da cidade sem querer e não seja técnico
+        if (filteredMatches.length === 0) {
+            filteredMatches = rawMatches.filter(row => {
+                const val = getColValue(row, ['CIDADE ATENDIDA', 'Cidade Atendida', 'cidade atendida', 'Cidade']);
+                return val && normalizeSearch(val).includes(query);
+            });
+            // Se ainda assim for 0, volta pra match bruto
+            if (filteredMatches.length === 0) {
+                filteredMatches = rawMatches;
+            }
+        }
+    }
+
+    // Deduplicar técnicos para a MESMA "Cidade Atendida", mantendo a menor distância
+    const uniqueMatchesMap = new Map();
+
+    filteredMatches.forEach(row => {
+        // Se estivermos buscando um técnico, a chave de desduplicação será o Técnico + A Cidade que ele atende
+        // Se estivermos buscando uma cidade, a chave será apenas o Técnico (pois já filtramos pela cidade acima)
+
+        const tecnico = getColValue(row, ['TÉCNICO', 'Técnico', 'Tecnico']) || 'N/A';
+        const cidadeAtendida = getColValue(row, ['CIDADE ATENDIDA', 'Cidade Atendida', 'cidade atendida', 'Cidade']) || 'N/A';
+        const distRaw = getColValue(row, ['DISTÂNCIA (KM)', 'Distância']) || '0';
+        const dist = parseFloat(String(distRaw).replace(',', '.')) || 0;
+
+        const key = isTecnico ?
+            `${normalizeSearch(tecnico)}||${normalizeSearch(cidadeAtendida)}` :
+            `${normalizeSearch(tecnico)}`;
+
+        if (!uniqueMatchesMap.has(key)) {
+            uniqueMatchesMap.set(key, row);
+        } else {
+            const existingRow = uniqueMatchesMap.get(key);
+            const existingDistRaw = getColValue(existingRow, ['DISTÂNCIA (KM)', 'Distância']) || '0';
+            const existingDist = parseFloat(String(existingDistRaw).replace(',', '.')) || 0;
+
+            if (dist < existingDist) {
+                uniqueMatchesMap.set(key, row);
+            }
+        }
+    });
+
+    const matches = Array.from(uniqueMatchesMap.values());
+
     heroSection.classList.add('minimized');
     setTimeout(() => dashboard.classList.add('visible'), 100);
 
-    const matchIsTecnico = matches[0] && getColValue(matches[0], ['TÉCNICO', 'Técnico', 'Tecnico']) && normalizeSearch(getColValue(matches[0], ['TÉCNICO', 'Técnico', 'Tecnico'])).includes(query);
+    // Função auxiliar para buscar telefone do técnico
+    const getTechPhone = (techName) => {
+        if (!techName) return '';
+        const techData = dbInfo['tecnicos'].data;
+        if (!techData || techData.length === 0) return '';
+        const techMatch = techData.find(t => normalizeSearch(getColValue(t, ['TECNICO', 'Técnico', 'Tecnico'])) === normalizeSearch(techName));
+        if (techMatch) {
+            let phone = getColValue(techMatch, ['TELEFONE', 'Telefone', 'Celular']);
+            if (phone) {
+                // Remove tudo que não for dígito
+                let strPhone = String(phone).replace(/\D/g, '');
+                // Formatação: (11) 95871-1836
+                if (strPhone.length === 11) {
+                    return `(${strPhone.substring(0, 2)}) ${strPhone.substring(2, 7)}-${strPhone.substring(7)}`;
+                } else if (strPhone.length === 10) {
+                    return `(${strPhone.substring(0, 2)}) ${strPhone.substring(2, 6)}-${strPhone.substring(6)}`;
+                }
+                return phone; // retorna original se não bater o tamanho
+            }
+        }
+        return '';
+    };
 
-    if (matchIsTecnico) {
+    if (isTecnico) {
         const nomeTecnico = getColValue(matches[0], ['TÉCNICO', 'Técnico', 'Tecnico']) || 'Sem Nome';
+        const telefone = getTechPhone(nomeTecnico);
+
         cidadesHeader.innerHTML = `
             <h3>Técnico ${nomeTecnico}</h3>
+            ${telefone ? `<div><span style="font-size: 0.85rem; background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> ${telefone}</span></div>` : ''}
             <p>Atende a <strong>${matches.length}</strong> cidades na região.</p>
         `;
 
@@ -413,20 +609,25 @@ function renderCidadesInfo(matches, query) {
         const others = sortedMatches.slice(1);
 
         const recCityName = getColValue(rec, ['CIDADE ATENDIDA', 'Cidade Atendida', 'cidade atendida', 'Cidade']) || 'N/A';
+        const recUfName = getColValue(rec, ['UF ATENDIDA', 'UF Atendida', 'UF', 'Estado', 'Uf']) || 'N/A';
 
         // Usuário procurou pela cidade
         cidadesHeader.innerHTML = `
-            <h3>Cidade encontrada: ${recCityName}</h3>
+            <h3>Cidade encontrada: ${recCityName} - ${recUfName}</h3>
             <p>Esta cidade é atendida por <strong>${matches.length}</strong> técnico(s):</p>
         `;
+
+        const recTech = getColValue(rec, ['TÉCNICO', 'Técnico', 'Tecnico']) || 'N/A';
+        const recPhone = getTechPhone(recTech);
 
         let html = `
             <div class="cidade-card" style="grid-column: 1 / -1; border-color: #22c55e; border-width: 2px; background: #f0fdf4;">
                 <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                     <div>
                         <div style="color: #16a34a; font-size: 0.75rem; font-weight: 800; margin-bottom: 0.25rem;">✨ TÉCNICO MAIS PRÓXIMO</div>
-                        <span class="cidade-name" style="display:block; margin-bottom:0.25rem; font-size: 1.1rem; color: #166534;">${getColValue(rec, ['TÉCNICO', 'Técnico', 'Tecnico']) || 'N/A'}</span>
-                        <span style="font-size: 0.85rem; color: #15803d;">De: ${getColValue(rec, ['CIDADE BASE', 'Cidade Base']) || 'N/A'} <strong>(${getColValue(rec, ['DISTÂNCIA (KM)', 'Distância']) || '0'}km)</strong></span>
+                        <span class="cidade-name" style="display:inline-block; margin-bottom:0.25rem; font-size: 1.1rem; color: #166534; font-weight: bold;">${recTech}</span>
+                        ${recPhone ? `<span style="font-size: 0.8rem; background: #bbf7d0; color: #166534; padding: 2px 6px; border-radius: 4px; margin-left: 8px;"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px; vertical-align:middle;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>${recPhone}</span>` : ''}
+                        <div style="font-size: 0.85rem; color: #15803d; margin-top: 4px;">De: ${getColValue(rec, ['CIDADE BASE', 'Cidade Base']) || 'N/A'} <strong>(${getColValue(rec, ['DISTÂNCIA (KM)', 'Distância']) || '0'}km)</strong></div>
                     </div>
                     <span class="cidade-uf" style="background: #bbf7d0; color: #166534;">${getColValue(rec, ['UF ATENDIDA', 'UF Atendida', 'UF', 'Estado', 'Uf']) || 'N/A'}</span>
                 </div>
@@ -436,15 +637,20 @@ function renderCidadesInfo(matches, query) {
         // Se houver mais técnicos
         if (others.length > 0) {
             html += `<h4 style="grid-column: 1 / -1; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">Outras opções de técnicos:</h4>`;
-            html += others.map(m => `
+            html += others.map(m => {
+                const techName = getColValue(m, ['TÉCNICO', 'Técnico', 'Tecnico']) || 'N/A';
+                const techPhone = getTechPhone(techName);
+                return `
                 <div class="cidade-card">
                     <div>
-                        <span class="cidade-name" style="display:block; margin-bottom:0.25rem;">${getColValue(m, ['TÉCNICO', 'Técnico', 'Tecnico']) || 'N/A'}</span>
-                        <span style="font-size: 0.75rem; color: #64748b;">De: ${getColValue(m, ['CIDADE BASE', 'Cidade Base']) || 'N/A'} (${getColValue(m, ['DISTÂNCIA (KM)', 'Distância']) || '0'}km)</span>
+                        <span class="cidade-name" style="display:inline-block; margin-bottom:0.25rem; font-weight: bold;">${techName}</span>
+                        ${techPhone ? `<div style="font-size: 0.75rem; color: #475569; margin-bottom: 2px;"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px; vertical-align:middle;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>${techPhone}</div>` : ''}
+                        <div style="font-size: 0.75rem; color: #64748b;">De: ${getColValue(m, ['CIDADE BASE', 'Cidade Base']) || 'N/A'} (${getColValue(m, ['DISTÂNCIA (KM)', 'Distância']) || '0'}km)</div>
                     </div>
                     <span class="cidade-uf">${getColValue(m, ['UF ATENDIDA', 'UF Atendida', 'UF', 'Estado', 'Uf']) || 'N/A'}</span>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         cidadesList.innerHTML = html;
