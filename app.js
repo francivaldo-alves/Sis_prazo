@@ -129,57 +129,169 @@ fileInput.addEventListener('change', (e) => {
     }
 });
 
+function setupSearch() {
+    // Create a mini spinner for inside the search button
+    const btnOriginalText = btnSearch.innerHTML;
+    const btnLoadingText = `<svg class="spinner" viewBox="0 0 50 50" style="width:20px;height:20px;animation:rotate 2s linear infinite;"><circle cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" style="stroke-dasharray: 1, 200; stroke-dashoffset: 0; animation: dash 1.5s ease-in-out infinite;"/></svg> Buscando...`;
+
+    const searchSuggestions = document.getElementById('search-suggestions');
+
+    const triggerSearch = (forceQuery) => {
+        const query = (forceQuery || searchInput.value).trim();
+        if (!query) return;
+
+        searchSuggestions.style.display = 'none'; // hide suggestions
+        searchInput.value = query; // fill input
+
+        // Simula o tempo de busca
+        btnSearch.innerHTML = btnLoadingText;
+        btnSearch.disabled = true;
+        document.getElementById('dashboard-results').style.opacity = '0.5';
+
+        setTimeout(() => {
+            handleSearch(query);
+            btnSearch.innerHTML = btnOriginalText;
+            btnSearch.disabled = false;
+            document.getElementById('dashboard-results').style.opacity = '1';
+        }, 400); // 400ms loading pra dar UX feeling
+    };
+
+    btnSearch.addEventListener('click', () => triggerSearch());
+
+    let debounceTimeout;
+    searchInput.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        clearTimeout(debounceTimeout);
+
+        if (val.length < 2 || dbInfo[currentTab].status !== 'ready') {
+            searchSuggestions.style.display = 'none';
+            return;
+        }
+
+        debounceTimeout = setTimeout(() => {
+            const queryNorm = normalizeSearch(val);
+            const data = dbInfo[currentTab].data;
+            const suggestions = [];
+
+            // Popula sugestões baseado na aba atual
+            for (let i = 0; i < data.length; i++) {
+                if (suggestions.length >= 8) break; // max 8 suggestions
+                const row = data[i];
+
+                if (currentTab === 'estabelecimentos') {
+                    const term = normalizeSearch(getColValue(row, ['Terminal', 'terminal', 'Terminal ', 'TERMINAL']) || '');
+                    const cep = normalizeSearch(getColValue(row, ['CEP', 'cep']) || '');
+                    const name = normalizeSearch(getColValue(row, ['Nome', 'Razao Social', 'Estabelecimento']) || '');
+
+                    if (term.includes(queryNorm) || cep.includes(queryNorm) || name.includes(queryNorm)) {
+                        const originalTerm = getColValue(row, ['Terminal', 'terminal', 'Terminal ', 'TERMINAL']) || '';
+                        const originalName = getColValue(row, ['Nome', 'Razao Social', 'Estabelecimento']) || '';
+                        suggestions.push(originalTerm ? `${originalTerm} - ${originalName}` : originalName);
+                    }
+                } else if (currentTab === 'tecnicos') {
+                    const name = normalizeSearch(getColValue(row, ['TECNICO', 'Tecnico']) || '');
+                    if (name.includes(queryNorm) && normalizeSearch(getColValue(row, ['TECNICO', 'Tecnico'])) !== 'n/a') {
+                        const originalName = getColValue(row, ['TECNICO', 'Tecnico']);
+                        if (!suggestions.includes(originalName)) suggestions.push(originalName);
+                    }
+                } else if (currentTab === 'cidades') {
+                    const city = normalizeSearch(getColValue(row, ['CIDADE ATENDIDA', 'Cidade Atendida', 'cidade atendida', 'Cidade']) || '');
+                    if (city.includes(queryNorm)) {
+                        const originalCity = getColValue(row, ['CIDADE ATENDIDA', 'Cidade Atendida', 'cidade atendida', 'Cidade']);
+                        if (!suggestions.includes(originalCity)) suggestions.push(originalCity);
+                    }
+                }
+            }
+
+            if (suggestions.length > 0) {
+                searchSuggestions.innerHTML = suggestions.map(s => `
+                    <div class="suggestion-item" style="padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--card-border);" onmouseover="this.style.background='rgba(99, 102, 241, 0.1)'" onmouseout="this.style.background='transparent'" onclick="document.getElementById('search-input').value='${s.split(' - ')[0]}'; document.getElementById('btn-search').click();">
+                        ${s}
+                    </div>
+                `).join('');
+                searchSuggestions.style.display = 'flex';
+            } else {
+                searchSuggestions.style.display = 'none';
+            }
+        }, 300);
+    });
+
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            clearTimeout(debounceTimeout);
+            searchSuggestions.style.display = 'none';
+            triggerSearch();
+        }
+    });
+
+    // Fechar sugestoes ao clicar fora
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-box')) {
+            searchSuggestions.style.display = 'none';
+        }
+    });
+
+    btnClear.addEventListener('click', () => {
+        dashboard.classList.remove('visible');
+        heroSection.classList.remove('minimized');
+        searchInput.value = '';
+        searchInput.focus();
+        searchSuggestions.style.display = 'none';
+    });
+}
+
 // Lógica das Abas
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         // Remover classes ativas
         tabBtns.forEach(b => b.classList.remove('active'));
-        tabContents.forEach(c => c.classList.remove('active'));
-
-        // Adicionar ativa na aba clicada
+        // tabContents.forEach(c => c.classList.remove('active')); // Original line
         btn.classList.add('active');
-        currentTab = btn.getAttribute('data-tab');
 
-        // Resetar interface
-        searchInput.value = '';
-        dashboard.classList.remove('visible');
-        heroSection.classList.remove('minimized');
-        updateSearchPlaceholder();
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        currentTab = btn.dataset.tab;
 
-        // Ativar aba correspondente
-        if (currentTab === 'estabelecimentos' || currentTab === 'tecnicos') {
-            document.getElementById('prazos-results').classList.add('active');
-        } else {
-            document.getElementById('cidades-results').classList.add('active');
+        const contentId = currentTab === 'estabelecimentos' ? 'prazos-results' :
+            currentTab === 'tecnicos' ? 'prazos-results' :
+                'cidades-results';
+
+        document.getElementById(contentId).classList.add('active');
+
+        if (contentId === 'prazos-results') {
+            document.getElementById('estab-details').style.display = currentTab === 'tecnicos' ? 'block' : 'block';
+            document.getElementById('highlight-cards').style.display = currentTab === 'tecnicos' ? 'none' : 'grid';
+            document.getElementById('delay-warning-container').style.display = 'none';
+        }
+
+        searchInput.placeholder = currentTab === 'estabelecimentos' ? 'Digite o CEP ou Terminal (Ex: 04359-000 ou 35)' :
+            currentTab === 'tecnicos' ? 'Digite o nome do Técnico (Ex: ALEX RAMOS COSTA)' :
+                'Digite a Cidade Atendida (Ex: Carapicuíba)';
+
+        if (dashboard.classList.contains('active')) {
+            handleSearch(searchInput.value);
         }
     });
 });
 
+setTimeout(() => { searchInput.focus(); }, 300);
+// The closing '});' for DOMContentLoaded was moved to the top.
 
-// Search Logic
-searchInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') performSearch();
+
+reader.readAsBinaryString(file);
+    });
+
+downloadBtn.addEventListener('click', () => {
+    if (processedWorkbook) {
+        XLSX.writeFile(processedWorkbook, "Prazos_em_Lote_Resultado.xlsx");
+    }
 });
+}
+setupBatchProcessing();
 
-btnSearch.addEventListener('click', performSearch);
-
-btnClear.addEventListener('click', () => {
-    searchInput.value = '';
-    dashboard.classList.remove('visible');
-
-    setTimeout(() => {
-        heroSection.classList.remove('minimized');
-    }, 100);
-
-    setTimeout(() => { searchInput.focus(); }, 300);
-});
-
-function performSearch() {
-    const rawQuery = searchInput.value.trim();
+function handleSearch(rawQuery) { // Renamed from performSearch and now accepts query
     if (!rawQuery) return;
 
     if (dbInfo[currentTab].status !== 'ready') {
-        alert("A base desta aba não pôde ser carregada.");
         return;
     }
 
@@ -398,6 +510,24 @@ function renderEstablishmentInfo(row) {
             }
         }
 
+        let whatsAppLink = '';
+        if (techPhone.includes('(')) {
+            // Remove tudo exceto números para o link do whatsapp
+            const justNumbers = techPhone.replace(/\D/g, '');
+            whatsAppLink = `https://wa.me/55${justNumbers}`;
+        }
+
+        let mapsLink = '';
+        if (techDist) {
+            // Get estab city and tech base city for maps query
+            const estabCity = getColValue(row, ['Cidade', 'Municipio', 'CIDADE']) || '';
+            const techCity = (dbInfo['tecnicos']?.data || []).find(t => normalizeSearch(getColValue(t, ['TECNICO', 'Técnico', 'Tecnico'])) === normalizeSearch(tecnico));
+            const baseCityName = techCity ? getColValue(techCity, ['CIDADE', 'Cidade ']) : '';
+            if (estabCity && baseCityName) {
+                mapsLink = `https://www.google.com/maps/dir/${encodeURIComponent(baseCityName)}/${encodeURIComponent(estabCity)}`;
+            }
+        }
+
         highlightCards.innerHTML += `
             <div class="highlight-card tech-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 1rem;">
                 <div style="display: flex; align-items: center; gap: 1rem;">
@@ -414,21 +544,25 @@ function renderEstablishmentInfo(row) {
                 
                 <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: flex-start; margin-top: auto;">
                     ${techDist ? `
-                    <span style="font-size: 0.85rem; background: rgba(99, 102, 241, 0.1); color: #818cf8; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(99, 102, 241, 0.2);">
+                    ${mapsLink ? `<a href="${mapsLink}" target="_blank" style="text-decoration: none;" title="Ver Rota no Mapa">` : ''}
+                    <span style="font-size: 0.85rem; background: rgba(99, 102, 241, 0.1); color: #818cf8; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(99, 102, 241, 0.2); transition: background 0.2s; cursor: ${mapsLink ? 'pointer' : 'default'};" onmouseover="this.style.background='rgba(99, 102, 241, 0.2)'" onmouseout="this.style.background='rgba(99, 102, 241, 0.1)'">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                         </svg>
                         <strong>${techDist}km</strong>
-                    </span>` : ''}
+                    </span>
+                    ${mapsLink ? `</a>` : ''}` : ''}
                     
                     ${techPhone ? `
-                    <span style="font-size: 0.85rem; background: rgba(16, 185, 129, 0.1); color: #34d399; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(16, 185, 129, 0.2);">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                        </svg>
-                        ${techPhone}
-                    </span>` : ''}
+                    <a href="${whatsAppLink}" target="_blank" style="text-decoration: none;" title="Abrir no WhatsApp">
+                        <span style="font-size: 0.85rem; background: rgba(16, 185, 129, 0.1); color: #34d399; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(16, 185, 129, 0.2); transition: background 0.2s; cursor: pointer;" onmouseover="this.style.background='rgba(16, 185, 129, 0.2)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.1)'">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                            ${techPhone}
+                        </span>
+                    </a>` : ''}
                 </div>
             </div>
         `;
@@ -452,6 +586,8 @@ function renderTecnicoInfo(row) {
     const cnpj = getColValue(row, ['CNPJ']) || '';
 
     let telefone = telefoneRaw;
+    let whatsAppLink = '';
+
     if (telefoneRaw) {
         let strPhone = String(telefoneRaw).replace(/\D/g, '');
         if (strPhone.length === 11) {
@@ -459,25 +595,42 @@ function renderTecnicoInfo(row) {
         } else if (strPhone.length === 10) {
             telefone = `(${strPhone.substring(0, 2)}) ${strPhone.substring(2, 6)}-${strPhone.substring(6)}`;
         }
+        whatsAppLink = `https://wa.me/55${strPhone}`;
     }
+
+    const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${bairro ? bairro + ' - ' : ''}${cidade} ${uf}`)}`;
 
     estabDetailsCard.innerHTML = `
         <div class="estab-header">
             <h3>Técnico: ${nome}</h3>
-            <div class="badges-container">
-                <span class="badge" style="background: #dbeafe; color: #1e40af;">${regiao}</span>
-            </div>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); padding: 5px 12px; border-radius: 20px; font-weight: 500;">
+                ${regiao}
+            </span>
         </div>
-        <div class="estab-info-grid">
-            <div class="estab-field">
+        <div class="estab-grid">
+            <div class="info-item">
                 <span class="label">Localização Base</span>
-                <span class="val">${bairro ? bairro + ' - ' : ''}${cidade}/${uf}</span>
+                <a href="${mapsLink}" target="_blank" style="text-decoration: none; color: inherit;" title="Ver no Mapa">
+                    <span class="val" style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#818cf8">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        </svg>
+                        ${bairro ? bairro + ' - ' : ''}${cidade}/${uf}
+                    </span>
+                </a>
             </div>
-            <div class="estab-field">
+            ${telefone ? `
+            <div class="info-item">
                 <span class="label">Contato</span>
-                <span class="val">${telefone || 'Indisponível'}</span>
-            </div>
-            <div class="estab-field">
+                <a href="${whatsAppLink}" target="_blank" style="text-decoration: none; color: inherit;" title="Abrir no WhatsApp">
+                    <span class="val" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.1); color: #34d399; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2); transition: background 0.2s; cursor: pointer;" onmouseover="this.style.background='rgba(16, 185, 129, 0.2)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.1)'">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                        </svg>
+                        ${telefone}
+                    </span>
+                </a>
+            </div>` : ''}          <div class="info-item">
                 <span class="label">CNPJ</span>
                 <span class="val">${formatCnpj(cnpj) || 'N/A'}</span>
             </div>
@@ -770,28 +923,194 @@ function renderResults(options) {
             rowClass = "row-success";
         } else if (opt.days > bestOption.days * 1.5) {
             rowClass = "row-warning";
-            pbClass = opt.days > 10 ? "pb-error" : "pb-warning";
+            // The original MAX_DAYS calculation and progress bar rendering logic is being replaced/removed by the new sorting logic.
+            // The new logic will handle rendering the table rows and sorting.
+
+            // Popular Tabela
+            const resultsTableBody = document.querySelector('#results-table tbody');
+            resultsTableBody.innerHTML = '';
+
+            // Configuração de Ordenação Global para a tabela atual
+            window.currentTableSort = { column: 'prazo', asc: true };
+
+            const renderTableRows = (sortedOptions) => {
+                resultsTableBody.innerHTML = '';
+                sortedOptions.forEach(opt => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                <td style="font-weight: 500;">
+                    ${formatProviderName(opt.provider)}
+                    ${opt.provider === bestOption.provider ? ' <span title="Recomendado" style="font-size:1.1rem">✨</span>' : ''}
+                </td>
+                <td>
+                    <span class="time-badge">${opt.days} ${opt.days === 1 ? 'dia' : 'dias'}</span>
+                </td>
+            `;
+                    resultsTableBody.appendChild(tr);
+                });
+            };
+
+            // Render inicial
+            // Default sort by Prazo (asc)
+            const sortedInit = [...options].sort((a, b) => a.days - b.days);
+            renderTableRows(sortedInit);
+
+            // Adiciona listener de clique nos headers da tabela para ordenação
+            const theadTr = document.querySelector('#results-table thead tr');
+            theadTr.innerHTML = `
+        <th data-sort="provider" style="cursor: pointer; user-select: none;" title="Ordenar por Transportadora">Transportadora <span class="sort-icon"></span></th>
+        <th data-sort="days" style="cursor: pointer; user-select: none;" title="Ordenar por Prazo">Prazo <span class="sort-icon">🔼</span></th>
+    `;
+
+            theadTr.querySelectorAll('th').forEach(th => {
+                th.addEventListener('click', () => {
+                    const column = th.getAttribute('data-sort');
+                    if (window.currentTableSort.column === column) {
+                        window.currentTableSort.asc = !window.currentTableSort.asc;
+                    } else {
+                        window.currentTableSort.column = column;
+                        window.currentTableSort.asc = true; // default asc on new column
+                    }
+
+                    // Atualiza ícones
+                    theadTr.querySelectorAll('.sort-icon').forEach(icon => icon.innerHTML = '');
+                    th.querySelector('.sort-icon').innerHTML = window.currentTableSort.asc ? '🔼' : '🔽';
+
+                    // Ordena os dados
+                    const newSorted = [...options].sort((a, b) => {
+                        if (column === 'days') {
+                            return window.currentTableSort.asc ? a.days - b.days : b.days - a.days;
+                        } else { // column is 'provider'
+                            return window.currentTableSort.asc ? a.provider.localeCompare(b.provider) : b.provider.localeCompare(a.provider);
+                        }
+                    });
+
+                    renderTableRows(newSorted);
+                });
+            });
         }
 
-        if (rowClass) tr.classList.add(rowClass);
+        function setupBatchProcessing() {
+            const batchFileInput = document.getElementById('batchFileInput');
+            const processBatchBtn = document.getElementById('processBatchBtn');
+            const statusDiv = document.getElementById('batchStatus');
+            const downloadBtn = document.getElementById('downloadBatchResult');
 
-        const widthPercentage = Math.min((opt.days / MAX_DAYS) * 100, 100).toFixed(0);
+            let processedWorkbook = null;
 
-        tr.innerHTML = `
-            <td class="provider-name">
-                ${formatProviderName(opt.provider)}
-                <div class="progress-container">
-                    <div class="progress-bar ${pbClass}" style="width: 0%" data-target-width="${widthPercentage}"></div>
-                </div>
-            </td>
-            <td class="time-badge">${opt.days} dias</td>
-        `;
-        resultsTable.appendChild(tr);
+            processBatchBtn.addEventListener('click', () => {
+                const file = batchFileInput.files[0];
+                if (!file) {
+                    statusDiv.innerText = 'Por favor, selecione um arquivo.';
+                    return;
+                }
 
-        // Animate progress bar after short delay
-        setTimeout(() => {
-            const pb = tr.querySelector('.progress-bar');
-            if (pb) pb.style.width = pb.getAttribute('data-target-width') + '%';
-        }, 150);
-    });
-}
+                statusDiv.innerText = 'Processando...';
+                downloadBtn.style.display = 'none';
+                processedWorkbook = null;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = e.target.result;
+                        const workbook = XLSX.read(data, { type: 'binary' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                        if (json.length <= 1) {
+                            statusDiv.innerText = 'Arquivo vazio ou sem dados.';
+                            return;
+                        }
+
+                        const headers = json[0];
+                        const rowsToProcess = json.slice(1); // Exclude header row
+
+                        let processedCount = 0;
+                        const batchSize = 100; // Process 100 rows at a time
+
+                        const processBatch = () => {
+                            const start = processedCount;
+                            const end = Math.min(processedCount + batchSize, rowsToProcess.length);
+
+                            for (let i = start; i < end; i++) {
+                                const row = rowsToProcess[i];
+                                const rowObject = {};
+                                headers.forEach((header, index) => {
+                                    rowObject[header] = row[index];
+                                });
+
+                                const deliveryOptions = [];
+                                for (let j = 0; j < headers.length; j++) {
+                                    const colName = headers[j];
+                                    const val = rowObject[colName];
+
+                                    const ignoreKeywords = [
+                                        'cep', 'terminal', 'cidade', 'estado', 'uf', 'região', 'regiao', 'id', 'codigo', 'origem',
+                                        'endereco', 'endereço', 'estab novo', 'nome', 'grupo', 'razao social', 'logradouro',
+                                        'bairro', 'tipo operacao', 'técnico', 'tecnico', 'melhor forma', 'melhor envio', 'prazo correios',
+                                        'empresa', 'treinamento', 'instalador', 'prospectador', 'parceiro', 'usuario', 'backup', 'cnpj', 'email', 'telefone', 'dat de'
+                                    ];
+                                    const isIgnored = ignoreKeywords.some(kw => normalizeSearch(colName).includes(normalizeSearch(kw)));
+
+                                    if (isIgnored) continue;
+
+                                    if (val !== null && val !== undefined) {
+                                        const numVal = parseInt(String(val).replace(/[^0-9]/g, ''), 10);
+                                        if (!isNaN(numVal) && String(val).trim() !== "" && numVal < 1000) {
+                                            deliveryOptions.push({
+                                                provider: colName,
+                                                days: numVal
+                                            });
+                                        }
+                                    }
+                                }
+                                deliveryOptions.sort((a, b) => a.days - b.days);
+
+                                // Add the best option to the row
+                                if (deliveryOptions.length > 0) {
+                                    rowObject['MELHOR PRAZO (DIAS)'] = deliveryOptions[0].days;
+                                    rowObject['TRANSPORTADORA MELHOR PRAZO'] = deliveryOptions[0].provider;
+                                } else {
+                                    rowObject['MELHOR PRAZO (DIAS)'] = 'N/A';
+                                    rowObject['TRANSPORTADORA MELHOR PRAZO'] = 'N/A';
+                                }
+                                // Update the original json array with the new data
+                                json[i + 1] = Object.values(rowObject);
+                            }
+
+                            processedCount += (end - start);
+                            statusDiv.innerText = `Processando: ${processedCount} / ${rowsToProcess.length}...`;
+
+                            if (processedCount < rowsToProcess.length) {
+                                setTimeout(processBatch, 0); // Next batch
+                            } else {
+                                // Finished
+                                statusDiv.innerText = 'Processamento Concluído! ✅';
+                                const newWs = XLSX.utils.aoa_to_sheet(json);
+                                const newWb = XLSX.utils.book_new();
+                                XLSX.utils.book_append_sheet(newWb, newWs, "Prazos Calculados");
+                                processedWorkbook = newWb;
+
+                                downloadBtn.style.display = 'inline-flex';
+                            }
+                        };
+
+                        setTimeout(processBatch, 50);
+
+                    } catch (err) {
+                        console.error(err);
+                        statusDiv.innerText = 'Erro ao ler o arquivo. Certifique-se de que é um CSV ou XLSX válido.';
+                    }
+                };
+
+                reader.readAsBinaryString(file);
+            });
+
+            downloadBtn.addEventListener('click', () => {
+                if (processedWorkbook) {
+                    XLSX.writeFile(processedWorkbook, "Prazos_em_Lote_Resultado.xlsx");
+                }
+            });
+        }
+        setupBatchProcessing();
