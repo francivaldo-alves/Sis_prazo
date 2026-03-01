@@ -168,7 +168,42 @@ body {
 .hero-section p {
     color: var(--text-secondary);
     font-size: 1.125rem;
-    margin-bottom: 2.5rem;
+    margin-bottom: 2rem;
+}
+
+/* Tabs Navigation */
+.tabs-nav {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    background: #e2e8f0;
+    padding: 0.5rem;
+    border-radius: var(--radius-lg);
+    display: inline-flex;
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.tab-btn.active {
+    background: var(--bg-surface);
+    color: var(--accent);
+    box-shadow: var(--shadow-sm);
 }
 
 /* Search Box */
@@ -734,4 +769,74 @@ tr:last-child td {
 .btn-outline:hover {
     background: #f1f5f9;
     color: var(--text-primary);
+}
+
+/* Tab Content Visibility */
+.tab-content {
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.tab-content.active {
+    display: block;
+    opacity: 1;
+}
+
+/* Cidades Results */
+.cidades-header-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    text-align: left;
+}
+
+.cidades-header-card h3 {
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.cidades-header-card p {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.cidades-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.cidade-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s;
+}
+
+.cidade-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    box-shadow: var(--shadow-md);
+}
+
+.cidade-card .cidade-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.cidade-card .cidade-uf {
+    background: #f1f5f9;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-secondary);
 }

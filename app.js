@@ -1,12 +1,17 @@
-let globalData = [];
-let headers = [];
+const dbInfo = {
+    estabelecimentos: { filename: 'Base_cadastros_Unificada_Final.xlsx', data: [], headers: [], status: 'loading' },
+    tecnicos: { filename: 'Base_TECNICOS_Prazos_Atualizados.xlsx', data: [], headers: [], status: 'loading' },
+    cidades: { filename: 'cidades_atendidas_detalhado.xlsx', data: [], headers: [], status: 'loading' }
+};
+
+let currentTab = 'estabelecimentos';
 
 const searchInput = document.getElementById('search-input');
 const btnSearch = document.getElementById('btn-search');
 const statusIndicator = document.getElementById('status-indicator');
 const statusText = statusIndicator.querySelector('.text');
 const heroSection = document.getElementById('hero-section');
-const dashboard = document.getElementById('dashboard');
+const dashboard = document.getElementById('dashboard-results');
 const btnClear = document.getElementById('btn-clear');
 
 const estabDetailsCard = document.getElementById('estab-details');
@@ -15,11 +20,16 @@ const delayWarningContainer = document.getElementById('delay-warning-container')
 const bestMatchCard = document.getElementById('best-match-card');
 const resultsTable = document.querySelector('#results-table tbody');
 
-const uploadFallback = document.getElementById('upload-fallback');
 const fileInput = document.getElementById('file-input');
+const uploadFallback = document.getElementById('upload-fallback');
 
-// Define default excel file
-const DEFAULT_FILENAME = 'Base_cadastros_Unificada_Final.xlsx';
+// Tabs
+const tabBtns = document.querySelectorAll('.tab-btn');
+const tabContents = document.querySelectorAll('.tab-content');
+
+// Cidades elements
+const cidadesHeader = document.getElementById('cidades-header');
+const cidadesList = document.getElementById('cidades-list');
 
 function normalizeSearch(str) {
     if (!str) return "";
@@ -27,18 +37,71 @@ function normalizeSearch(str) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+    // Carregar todas as bases paralelamente
+    await Promise.all([
+        loadDatabase('estabelecimentos'),
+        loadDatabase('tecnicos'),
+        loadDatabase('cidades')
+    ]);
+    updateGlobalStatus();
+});
+
+async function loadDatabase(dbKey) {
     try {
-        const response = await fetch(DEFAULT_FILENAME);
+        const response = await fetch(dbInfo[dbKey].filename);
         if (!response.ok) throw new Error('Network response was not ok');
         const arrayBuffer = await response.arrayBuffer();
-        processExcelData(arrayBuffer);
+
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+
+        if (json.length === 0) throw new Error("Planilha vazia.");
+
+        dbInfo[dbKey].data = json;
+        dbInfo[dbKey].headers = Object.keys(json[0]);
+        dbInfo[dbKey].status = 'ready';
     } catch (error) {
-        console.warn("Could not load default file, showing upload option.", error);
-        statusIndicator.className = 'status error';
-        statusText.innerText = "Base local não encontrada";
-        uploadFallback.classList.remove('hidden');
+        console.warn(`Could not load ${dbInfo[dbKey].filename}`, error);
+        dbInfo[dbKey].status = 'error';
     }
-});
+}
+
+function updateGlobalStatus() {
+    const allReady = Object.values(dbInfo).every(db => db.status === 'ready');
+    if (allReady) {
+        statusIndicator.className = 'status ready';
+        statusText.innerText = `Bases carregadas`;
+        searchInput.disabled = false;
+        searchInput.focus();
+        updateSearchPlaceholder();
+        uploadFallback.classList.add('hidden');
+    } else {
+        const allErrors = Object.values(dbInfo).every(db => db.status === 'error');
+        if (allErrors) {
+            statusIndicator.className = 'status error';
+            statusText.innerText = "Falha ao carregar bases";
+            uploadFallback.classList.remove('hidden');
+        } else {
+            statusIndicator.className = 'status warning';
+            statusText.innerText = "Atenção: Nem todas as bases carregaram.";
+            searchInput.disabled = false;
+            updateSearchPlaceholder();
+        }
+    }
+}
+
+function updateSearchPlaceholder() {
+    if (currentTab === 'estabelecimentos') {
+        searchInput.placeholder = "Digite o CEP ou Terminal (Ex: 06455-000)";
+    } else if (currentTab === 'tecnicos') {
+        searchInput.placeholder = "Digite o nome do Técnico";
+    } else if (currentTab === 'cidades') {
+        searchInput.placeholder = "Digite a Cidade ou o Técnico";
+    }
+}
 
 fileInput.addEventListener('change', (e) => {
     if (e.target.files.length) {
@@ -61,34 +124,32 @@ fileInput.addEventListener('change', (e) => {
     }
 });
 
-function processExcelData(dataBuffer) {
-    try {
-        const data = new Uint8Array(dataBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
+// Lógica das Abas
+tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        // Remover classes ativas
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
 
-        const json = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+        // Adicionar ativa na aba clicada
+        btn.classList.add('active');
+        currentTab = btn.getAttribute('data-tab');
 
-        if (json.length === 0) throw new Error("A planilha está vazia.");
+        // Resetar interface
+        searchInput.value = '';
+        dashboard.classList.remove('visible');
+        heroSection.classList.remove('minimized');
+        updateSearchPlaceholder();
 
-        globalData = json;
-        headers = Object.keys(json[0]);
+        // Ativar aba correspondente
+        if (currentTab === 'estabelecimentos' || currentTab === 'tecnicos') {
+            document.getElementById('prazos-results').classList.add('active');
+        } else {
+            document.getElementById('cidades-results').classList.add('active');
+        }
+    });
+});
 
-        statusIndicator.className = 'status ready';
-        statusText.innerText = `${globalData.length} registros prontos`;
-
-        searchInput.disabled = false;
-        searchInput.focus();
-        searchInput.placeholder = "Digite o CEP ou Terminal (Ex: 06455-000)";
-
-    } catch (error) {
-        console.error("Error parsing Excel:", error);
-        statusIndicator.className = 'status error';
-        statusText.innerText = "Erro ao processar dados";
-        uploadFallback.classList.remove('hidden');
-    }
-}
 
 // Search Logic
 searchInput.addEventListener('keypress', (e) => {
@@ -112,38 +173,66 @@ function performSearch() {
     const rawQuery = searchInput.value.trim();
     if (!rawQuery) return;
 
-    const query = normalizeSearch(rawQuery);
-
-    let match = null;
-
-    // First Priority: Try to match CEP exactly
-    match = globalData.find(row => {
-        const cepVal = normalizeSearch(row['CEP'] || row['cep']);
-        if (cepVal && cepVal === query) return true;
-        return false;
-    });
-
-    // Substring fallback if exact match fails
-    if (!match) {
-        match = globalData.find(row => {
-            for (let key in row) {
-                const cellVal = normalizeSearch(row[key]);
-                if (cellVal && cellVal.includes(query)) {
-                    return true;
-                }
-            }
-            return false;
-        });
-    }
-
-    if (!match) {
-        searchInput.style.animation = 'shake 0.5s ease';
-        setTimeout(() => searchInput.style.animation = '', 500);
+    if (dbInfo[currentTab].status !== 'ready') {
+        alert("A base desta aba não pôde ser carregada.");
         return;
     }
 
-    renderEstablishmentInfo(match);
-    analyzeDeliveryTimes(match);
+    const query = normalizeSearch(rawQuery);
+    const data = dbInfo[currentTab].data;
+
+    // Tratamento para Estabelecimentos
+    if (currentTab === 'estabelecimentos') {
+        let match = data.find(row => normalizeSearch(row['CEP'] || row['cep']) === query);
+        if (!match) {
+            match = data.find(row => {
+                for (let key in row) {
+                    if (normalizeSearch(row[key])?.includes(query)) return true;
+                }
+                return false;
+            });
+        }
+
+        if (!match) return showSearchError();
+
+        renderEstablishmentInfo(match);
+        analyzeDeliveryTimes(match, dbInfo[currentTab].headers);
+    }
+    // Tratamento para Técnicos
+    else if (currentTab === 'tecnicos') {
+        let match = data.find(row => normalizeSearch(row['TECNICO'] || row['tecnico'])?.includes(query));
+        if (!match) {
+            match = data.find(row => {
+                for (let key in row) {
+                    if (normalizeSearch(row[key])?.includes(query)) return true;
+                }
+                return false;
+            });
+        }
+
+        if (!match) return showSearchError();
+
+        renderTecnicoInfo(match);
+        analyzeDeliveryTimes(match, dbInfo[currentTab].headers);
+    }
+    // Tratamento para Cidades Atendidas
+    else if (currentTab === 'cidades') {
+        const matches = data.filter(row => {
+            for (let key in row) {
+                if (normalizeSearch(row[key])?.includes(query)) return true;
+            }
+            return false;
+        });
+
+        if (matches.length === 0) return showSearchError();
+
+        renderCidadesInfo(matches, query);
+    }
+}
+
+function showSearchError() {
+    searchInput.style.animation = 'shake 0.5s ease';
+    setTimeout(() => searchInput.style.animation = '', 500);
 }
 
 function getColValue(row, possibleNames) {
@@ -154,6 +243,15 @@ function getColValue(row, possibleNames) {
         }
     }
     return null;
+}
+
+function formatCnpj(val) {
+    if (!val) return '';
+    const str = String(val).replace(/\D/g, '');
+    if (str.length === 14) {
+        return str.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+    }
+    return val;
 }
 
 function renderEstablishmentInfo(row) {
@@ -245,18 +343,127 @@ function renderEstablishmentInfo(row) {
     }
 }
 
-function analyzeDeliveryTimes(row) {
+function renderTecnicoInfo(row) {
+    const nome = getColValue(row, ['TECNICO', 'Tecnico']) || 'N/A';
+    const bairro = getColValue(row, ['BAIRRO']) || '';
+    const cidade = getColValue(row, ['CIDADE', 'Cidade ']) || 'N/A';
+    const uf = getColValue(row, ['ESTADO', 'UF']) || 'N/A';
+    const regiao = getColValue(row, ['REGIÃO', 'Regiao']) || 'N/A';
+
+    const telefone = getColValue(row, ['TELEFONE']) || '';
+    const cnpj = getColValue(row, ['CNPJ']) || '';
+
+    estabDetailsCard.innerHTML = `
+        <div class="estab-header">
+            <h3>Técnico: ${nome}</h3>
+            <div class="badges-container">
+                <span class="badge" style="background: #dbeafe; color: #1e40af;">${regiao}</span>
+            </div>
+        </div>
+        <div class="estab-info-grid">
+            <div class="estab-field">
+                <span class="label">Localização Base</span>
+                <span class="val">${bairro ? bairro + ' - ' : ''}${cidade}/${uf}</span>
+            </div>
+            <div class="estab-field">
+                <span class="label">Contato</span>
+                <span class="val">${telefone || 'Indisponível'}</span>
+            </div>
+            <div class="estab-field">
+                <span class="label">CNPJ</span>
+                <span class="val">${formatCnpj(cnpj) || 'N/A'}</span>
+            </div>
+        </div>
+    `;
+
+    highlightCards.innerHTML = '';
+    highlightCards.style.display = 'none';
+}
+
+function renderCidadesInfo(matches, query) {
+    heroSection.classList.add('minimized');
+    setTimeout(() => dashboard.classList.add('visible'), 100);
+
+    const matchIsTecnico = matches[0] && getColValue(matches[0], ['TÉCNICO', 'Técnico', 'Tecnico']) && normalizeSearch(getColValue(matches[0], ['TÉCNICO', 'Técnico', 'Tecnico'])).includes(query);
+
+    if (matchIsTecnico) {
+        const nomeTecnico = getColValue(matches[0], ['TÉCNICO', 'Técnico', 'Tecnico']) || 'Sem Nome';
+        cidadesHeader.innerHTML = `
+            <h3>Técnico ${nomeTecnico}</h3>
+            <p>Atende a <strong>${matches.length}</strong> cidades na região.</p>
+        `;
+
+        cidadesList.innerHTML = matches.map(m => `
+            <div class="cidade-card">
+                <div>
+                    <span class="cidade-name" style="display:block; margin-bottom:0.25rem;">${getColValue(m, ['CIDADE ATENDIDA', 'Cidade Atendida', 'cidade atendida', 'Cidade']) || 'N/A'}</span>
+                    <span style="font-size: 0.75rem; color: #64748b;">Distância: ${getColValue(m, ['DISTÂNCIA (KM)', 'Distância']) || '0'}km</span>
+                </div>
+                <span class="cidade-uf">${getColValue(m, ['UF ATENDIDA', 'UF Atendida', 'uf atendida', 'Estado', 'UF', 'Uf']) || 'N/A'}</span>
+            </div>
+        `).join('');
+    } else {
+        // Ordena os técnicos por distância
+        const sortedMatches = matches.sort((a, b) => {
+            const getVal = (row) => String(getColValue(row, ['DISTÂNCIA (KM)', 'Distância']) || '0').replace(',', '.');
+            return parseFloat(getVal(a)) - parseFloat(getVal(b));
+        });
+
+        const rec = sortedMatches[0];
+        const others = sortedMatches.slice(1);
+
+        const recCityName = getColValue(rec, ['CIDADE ATENDIDA', 'Cidade Atendida', 'cidade atendida', 'Cidade']) || 'N/A';
+
+        // Usuário procurou pela cidade
+        cidadesHeader.innerHTML = `
+            <h3>Cidade encontrada: ${recCityName}</h3>
+            <p>Esta cidade é atendida por <strong>${matches.length}</strong> técnico(s):</p>
+        `;
+
+        let html = `
+            <div class="cidade-card" style="grid-column: 1 / -1; border-color: #22c55e; border-width: 2px; background: #f0fdf4;">
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                    <div>
+                        <div style="color: #16a34a; font-size: 0.75rem; font-weight: 800; margin-bottom: 0.25rem;">✨ TÉCNICO MAIS PRÓXIMO</div>
+                        <span class="cidade-name" style="display:block; margin-bottom:0.25rem; font-size: 1.1rem; color: #166534;">${getColValue(rec, ['TÉCNICO', 'Técnico', 'Tecnico']) || 'N/A'}</span>
+                        <span style="font-size: 0.85rem; color: #15803d;">De: ${getColValue(rec, ['CIDADE BASE', 'Cidade Base']) || 'N/A'} <strong>(${getColValue(rec, ['DISTÂNCIA (KM)', 'Distância']) || '0'}km)</strong></span>
+                    </div>
+                    <span class="cidade-uf" style="background: #bbf7d0; color: #166534;">${getColValue(rec, ['UF ATENDIDA', 'UF Atendida', 'UF', 'Estado', 'Uf']) || 'N/A'}</span>
+                </div>
+            </div>
+        `;
+
+        // Se houver mais técnicos
+        if (others.length > 0) {
+            html += `<h4 style="grid-column: 1 / -1; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem;">Outras opções de técnicos:</h4>`;
+            html += others.map(m => `
+                <div class="cidade-card">
+                    <div>
+                        <span class="cidade-name" style="display:block; margin-bottom:0.25rem;">${getColValue(m, ['TÉCNICO', 'Técnico', 'Tecnico']) || 'N/A'}</span>
+                        <span style="font-size: 0.75rem; color: #64748b;">De: ${getColValue(m, ['CIDADE BASE', 'Cidade Base']) || 'N/A'} (${getColValue(m, ['DISTÂNCIA (KM)', 'Distância']) || '0'}km)</span>
+                    </div>
+                    <span class="cidade-uf">${getColValue(m, ['UF ATENDIDA', 'UF Atendida', 'UF', 'Estado', 'Uf']) || 'N/A'}</span>
+                </div>
+            `).join('');
+        }
+
+        cidadesList.innerHTML = html;
+    }
+}
+
+function analyzeDeliveryTimes(row, headersList) {
     // We ignore typical descriptive columns AND explicitly ignore the columns user mentioned
     const ignoreKeywords = [
         'cep', 'terminal', 'cidade', 'estado', 'uf', 'região', 'regiao', 'id', 'codigo', 'origem',
         'endereco', 'endereço', 'estab novo', 'nome', 'grupo', 'razao social', 'logradouro',
-        'bairro', 'tipo operacao', 'técnico', 'tecnico', 'melhor forma', 'melhor envio'
+        'bairro', 'tipo operacao', 'técnico', 'tecnico', 'melhor forma', 'melhor envio', 'prazo correios',
+        'empresa', 'treinamento', 'instalador', 'prospectador', 'parceiro', 'usuario', 'backup', 'cnpj', 'email', 'telefone', 'dat de'
     ];
 
     const deliveryOptions = [];
 
-    for (let i = 0; i < headers.length; i++) {
-        const colName = headers[i];
+    for (let i = 0; i < headersList.length; i++) {
+        const colName = headersList[i];
         const val = row[colName];
 
         const isIgnored = ignoreKeywords.some(kw => normalizeSearch(colName).includes(normalizeSearch(kw)));

@@ -37,6 +37,12 @@
                 <h1>Encontre a melhor rota</h1>
                 <p>Consulte prazos e dados do estabelecimento instantaneamente.</p>
 
+                <div class="tabs-nav">
+                    <button class="tab-btn active" data-tab="estabelecimentos">Estabelecimentos</button>
+                    <button class="tab-btn" data-tab="tecnicos">Técnicos</button>
+                    <button class="tab-btn" data-tab="cidades">Cidades Atendidas</button>
+                </div>
+
                 <div class="search-box">
                     <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none"
                         viewBox="0 0 24 24" stroke="currentColor">
@@ -57,50 +63,66 @@
             </div>
 
             <!-- Dashboard Results -->
-            <div class="dashboard" id="dashboard">
+            <div class="dashboard" id="dashboard-results">
                 <div class="dashboard-header">
                     <h2>Resultados da Busca</h2>
                     <button class="btn-clear" id="btn-clear">Nova Busca</button>
                 </div>
 
-                <div class="estab-details-card mb-4" id="estab-details">
-                    <!-- Info of establishment injected here -->
-                </div>
+                <!-- Aba 1 e 2: Resultados (Estabelecimentos e Técnicos) -->
+                <div id="prazos-results" class="tab-content active">
+                    <div class="estab-details-card mb-4" id="estab-details">
+                        <!-- Info of establishment injected here -->
+                    </div>
 
-                <div class="highlight-cards mb-4" id="highlight-cards">
-                    <!-- Injected via JS -->
-                </div>
+                    <div class="highlight-cards mb-4" id="highlight-cards">
+                        <!-- Injected via JS -->
+                    </div>
 
-                <div id="delay-warning-container" class="delay-warning hidden mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"
-                        stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <div class="warning-text">
-                        <strong>Aviso de Prazo Estendido:</strong> Algumas rotas ultrapassam 10 dias.
+                    <div id="delay-warning-container" class="delay-warning hidden mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div class="warning-text">
+                            <strong>Aviso de Prazo Estendido:</strong> Algumas rotas ultrapassam 10 dias.
+                        </div>
+                    </div>
+
+                    <div class="grid">
+                        <div class="best-match-card" id="best-match-card">
+                            <!-- Injetado via JS -->
+                        </div>
+
+                        <div class="compare-card">
+                            <h3>Opções de Transporte</h3>
+                            <div class="table-container">
+                                <table id="results-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Transportadora</th>
+                                            <th>Prazo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Injetado -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="grid">
-                    <div class="best-match-card" id="best-match-card">
-                        <!-- Injetado via JS -->
+                <!-- Aba 3: Resultados (Cidades Atendidas) -->
+                <div id="cidades-results" class="tab-content">
+                    <div class="cidades-header-card mb-4" id="cidades-header">
+                        <!-- Info like 'Técnico XYZ atende 35 cidades' -->
                     </div>
 
-                    <div class="compare-card">
-                        <h3>Opções de Transporte</h3>
-                        <div class="table-container">
-                            <table id="results-table">
-                                <thead>
-                                    <tr>
-                                        <th>Transportadora</th>
-                                        <th>Prazo</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Injetado -->
-                                </tbody>
-                            </table>
+                    <div class="cidades-grid-container">
+                        <div class="cidades-list" id="cidades-list">
+                            <!-- Cidades listadas como cartões simplificados -->
                         </div>
                     </div>
                 </div>
