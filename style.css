@@ -346,19 +346,59 @@ body {
     gap: 1.5rem;
 }
 
+/* =======================================
+   RESPONSIVE: Tablets & Celulares (≤768px)
+   ======================================= */
 @media (max-width: 768px) {
-    .grid {
-        grid-template-columns: 1fr;
+
+    /* Layout geral */
+    .app-wrapper {
+        padding: 1rem;
     }
 
+    /* Header: manter em linha, mas mais compacto */
+    .top-nav {
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    /* Hero */
+    .hero-section {
+        margin: 1rem auto;
+    }
+
+    .hero-section h1 {
+        font-size: 2rem;
+    }
+
+    .hero-section p {
+        font-size: 0.95rem;
+        margin-bottom: 1.25rem;
+    }
+
+    /* Tabs: empilhar verticalmente */
+    .tabs-nav {
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.35rem;
+    }
+
+    .tab-btn {
+        width: 100%;
+        text-align: center;
+        padding: 0.65rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    /* Search box */
     .search-box {
         flex-direction: row;
         gap: 0.25rem;
     }
 
     .search-box input {
-        font-size: 1rem;
-        padding: 1rem 0.5rem 1rem 2.5rem;
+        font-size: 0.95rem;
+        padding: 0.9rem 0.5rem 0.9rem 2.5rem;
     }
 
     .search-box .search-icon {
@@ -366,9 +406,228 @@ body {
     }
 
     .btn-primary {
-        width: auto;
         padding: 0 1rem;
         font-size: 0.9rem;
+        height: 3.25rem;
+    }
+
+    /* Grid principal (results) */
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Dashboard */
+    .dashboard-header h2 {
+        font-size: 1.25rem;
+    }
+
+    /* Establishment details */
+    .estab-details-card {
+        padding: 1rem;
+    }
+
+    .estab-info-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    /* Highlight cards */
+    .highlight-cards {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .highlight-card {
+        padding: 1rem;
+    }
+
+    /* Best match card */
+    .best-match-card {
+        padding: 1.5rem 1rem;
+    }
+
+    .best-match-card .winner-name {
+        font-size: 1.1rem;
+    }
+
+    .best-match-card .winner-time {
+        font-size: 1rem;
+        padding: 0.4rem 1rem;
+    }
+
+    /* Compare card (tabela) */
+    .compare-card {
+        padding: 1rem;
+    }
+
+    .compare-card h3 {
+        margin-bottom: 1rem;
+        font-size: 1rem;
+    }
+
+    /* Tabela */
+    .table-container {
+        max-height: 300px;
+    }
+
+    td {
+        padding: 0.75rem 0;
+        font-size: 0.9rem;
+    }
+
+    .provider-name {
+        font-size: 0.9rem;
+    }
+
+    /* Cidades grid */
+    .cidades-list {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .cidades-header-card {
+        padding: 1rem;
+    }
+
+    /* Delay warning */
+    .delay-warning {
+        font-size: 0.85rem;
+        padding: 0.75rem;
+        gap: 0.75rem;
+    }
+
+    /* Upload fallback */
+    .upload-fallback {
+        padding: 1rem;
+    }
+}
+
+/* =======================================
+   RESPONSIVE: Celulares Pequenos (≤480px)
+   ======================================= */
+@media (max-width: 480px) {
+
+    .app-wrapper {
+        padding: 0.75rem;
+    }
+
+    /* Header: empilhar logo e controles */
+    .top-nav {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .top-nav>div {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    /* Ocultar texto do status, manter só o dot */
+    .status .text {
+        display: none;
+    }
+
+    .status {
+        padding: 0.4rem 0.6rem;
+    }
+
+    /* Hero */
+    .hero-section h1 {
+        font-size: 1.5rem;
+    }
+
+    .hero-section p {
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Tabs: fonte menor */
+    .tab-btn {
+        font-size: 0.85rem;
+        padding: 0.6rem 0.75rem;
+    }
+
+    /* Search: empilhar input + botão */
+    .search-box>div {
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+    }
+
+    .search-box input {
+        width: 100% !important;
+        padding: 0.85rem 0.5rem 0.85rem 2.25rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-primary {
+        width: 100%;
+        height: 2.75rem;
+        justify-content: center;
+    }
+
+    /* Dashboard header */
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .dashboard-header h2 {
+        font-size: 1.1rem;
+    }
+
+    /* Establishment header */
+    .estab-header h3 {
+        font-size: 1rem;
+    }
+
+    .estab-header .badge {
+        font-size: 0.7rem;
+    }
+
+    /* Highlight icon */
+    .highlight-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+    }
+
+    .highlight-content .val {
+        font-size: 0.9rem;
+    }
+
+    /* Best match */
+    .trophy-icon {
+        width: 44px;
+        height: 44px;
+    }
+
+    .best-match-card h3 {
+        font-size: 0.75rem;
+    }
+
+    /* Table font */
+    th {
+        font-size: 0.7rem;
+    }
+
+    td {
+        padding: 0.6rem 0;
+        font-size: 0.85rem;
+    }
+
+    .time-badge {
+        font-size: 0.8rem;
+        padding: 0.2rem 0.5rem;
+    }
+
+    /* Cidade card: empilhar */
+    .cidade-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
     }
 }
 
