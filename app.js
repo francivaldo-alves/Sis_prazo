@@ -27,6 +27,39 @@ const uploadFallback = document.getElementById('upload-fallback');
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 
+function setupTabs() {
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Remove active class from all buttons and contents
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+
+            // Add active class to clicked button and corresponding content
+            btn.classList.add('active');
+            const targetId = btn.getAttribute('data-tab') + '-results';
+
+            // Handle the specific ID mapping for Establishments/Tecnicos which share 'prazos-results'
+            let contentId = targetId;
+            if (btn.getAttribute('data-tab') === 'estabelecimentos' || btn.getAttribute('data-tab') === 'tecnicos') {
+                contentId = 'prazos-results';
+            }
+
+            const targetContent = document.getElementById(contentId);
+            if (targetContent) {
+                targetContent.classList.add('active');
+            }
+
+            // Update current tab status for search
+            currentTab = btn.getAttribute('data-tab');
+
+            // Clear current search results
+            document.getElementById('dashboard-results').classList.remove('visible');
+            searchInput.value = '';
+            document.getElementById('search-suggestions').style.display = 'none';
+        });
+    });
+}
+
 // Cidades elements
 const cidadesHeader = document.getElementById('cidades-header');
 const cidadesList = document.getElementById('cidades-list');
@@ -42,21 +75,61 @@ function normalizeSearch(str) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+    // Inicializar os manipuladores de UI
+    setupSearch();
+    setupTabs();
+
     // Carregar todas as bases paralelamente
     await Promise.all([
-        loadDatabase('estabelecimentos'),
-        loadDatabase('tecnicos'),
-        loadDatabase('cidades')
+        loadDatabase('estabelecimentos', dbInfo.estabelecimentos.filename),
+        loadDatabase('tecnicos', dbInfo.tecnicos.filename),
+        loadDatabase('cidades', dbInfo.cidades.filename)
     ]);
     updateGlobalStatus();
 });
 
-async function loadDatabase(dbKey) {
-    try {
-        const response = await fetch(dbInfo[dbKey].filename);
-        if (!response.ok) throw new Error('Network response was not ok');
-        const arrayBuffer = await response.arrayBuffer();
+async function loadDatabase(key, filePath) {
+    dbInfo[key].status = 'loading';
+    // Assuming updateDashboardUI is a function that updates the UI based on dbInfo statuses
+    // If it doesn't exist, this line might cause an error. For now, I'll assume it's intended.
+    // If it's meant to be updateGlobalStatus, then that function should be called.
+    // Given the context, updateGlobalStatus is likely the intended function to call here.
+    updateGlobalStatus(); // Changed from updateDashboardUI to updateGlobalStatus for consistency
 
+    try {
+        const response = await fetch(filePath);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        // Verifica idade da base de dados se for estabelecimentos ou tecnicos (as principais)
+        if (key === 'estabelecimentos' || key === 'tecnicos') {
+            const lastModified = response.headers.get('Last-Modified');
+            if (lastModified) {
+                const modDate = new Date(lastModified);
+                const daysOld = (Date.now() - modDate.getTime()) / (1000 * 60 * 60 * 24);
+
+                if (daysOld > 7) {
+                    const warningBar = document.getElementById('delay-warning-container');
+                    if (warningBar) {
+                        warningBar.style.display = 'block';
+                        warningBar.innerHTML = `
+                            <div class="card row-warning" style="margin-bottom: 1rem; border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.1);">
+                                <div style="display: flex; gap: 0.75rem; align-items: flex-start; color: #d97706;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="flex-shrink:0;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                    </svg>
+                                    <div>
+                                        <h4 style="margin-bottom: 0.25rem;">Atenção: Base Desatualizada</h4>
+                                        <p style="font-size: 0.9rem;">A base de dados <strong>${key}</strong> tem mais de ${Math.floor(daysOld)} dias e pode conter informações não validadas recentemente.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            }
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
         const data = new Uint8Array(arrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
@@ -65,12 +138,14 @@ async function loadDatabase(dbKey) {
 
         if (json.length === 0) throw new Error("Planilha vazia.");
 
-        dbInfo[dbKey].data = json;
-        dbInfo[dbKey].headers = Object.keys(json[0]);
-        dbInfo[dbKey].status = 'ready';
-    } catch (error) {
-        console.warn(`Could not load ${dbInfo[dbKey].filename}`, error);
-        dbInfo[dbKey].status = 'error';
+        dbInfo[key].data = json;
+        dbInfo[key].headers = Object.keys(json[0]);
+        dbInfo[key].status = 'ready';
+    } catch (e) {
+        console.error(`Erro ao carregar ${key}:`, e);
+        dbInfo[key].status = 'error';
+    } finally {
+        updateGlobalStatus(); // Changed from updateDashboardUI to updateGlobalStatus for consistency
     }
 }
 
@@ -80,6 +155,7 @@ function updateGlobalStatus() {
         statusIndicator.className = 'status ready';
         statusText.innerText = `Bases carregadas`;
         searchInput.disabled = false;
+        btnSearch.disabled = false;
         searchInput.focus();
         updateSearchPlaceholder();
         uploadFallback.classList.add('hidden');
@@ -93,6 +169,7 @@ function updateGlobalStatus() {
             statusIndicator.className = 'status warning';
             statusText.innerText = "Atenção: Nem todas as bases carregaram.";
             searchInput.disabled = false;
+            btnSearch.disabled = false;
             updateSearchPlaceholder();
         }
     }
@@ -163,7 +240,7 @@ function setupSearch() {
         const val = e.target.value.trim();
         clearTimeout(debounceTimeout);
 
-        if (val.length < 2 || dbInfo[currentTab].status !== 'ready') {
+        if (val.length < 2 || !dbInfo[currentTab] || dbInfo[currentTab].status !== 'ready') {
             searchSuggestions.style.display = 'none';
             return;
         }
@@ -275,23 +352,10 @@ tabBtns.forEach(btn => {
 
 setTimeout(() => { searchInput.focus(); }, 300);
 // The closing '});' for DOMContentLoaded was moved to the top.
-
-
-reader.readAsBinaryString(file);
-    });
-
-downloadBtn.addEventListener('click', () => {
-    if (processedWorkbook) {
-        XLSX.writeFile(processedWorkbook, "Prazos_em_Lote_Resultado.xlsx");
-    }
-});
-}
-setupBatchProcessing();
-
 function handleSearch(rawQuery) { // Renamed from performSearch and now accepts query
     if (!rawQuery) return;
 
-    if (dbInfo[currentTab].status !== 'ready') {
+    if (!dbInfo[currentTab] || dbInfo[currentTab].status !== 'ready') {
         return;
     }
 
@@ -736,10 +800,30 @@ function renderCidadesInfo(rawMatches, query) {
         const nomeTecnico = getColValue(matches[0], ['TÉCNICO', 'Técnico', 'Tecnico']) || 'Sem Nome';
         const telefone = getTechPhone(nomeTecnico);
 
+        // Buscar informações extras na base de Técnicos
+        const techData = dbInfo['tecnicos']?.data || [];
+        const techRow = techData.find(t => normalizeSearch(getColValue(t, ['TECNICO', 'Técnico', 'Tecnico'])) === normalizeSearch(nomeTecnico));
+
+        let baseRegiaoHtml = '';
+        if (techRow) {
+            const cidadeBase = getColValue(techRow, ['CIDADE', 'Cidade ']) || '';
+            const ufBase = getColValue(techRow, ['ESTADO', 'UF']) || '';
+            const regiao = getColValue(techRow, ['REGIÃO', 'Regiao']) || '';
+
+            let parts = [];
+            if (cidadeBase) parts.push(`Base: <strong>${cidadeBase}${ufBase ? ` - ${ufBase}` : ''}</strong>`);
+            if (regiao) parts.push(`Região: <strong>${regiao}</strong>`);
+
+            if (parts.length > 0) {
+                baseRegiaoHtml = `<p style="margin-top: 0.5rem; font-size: 0.95rem; color: var(--text-secondary);">${parts.join(' | ')}</p>`;
+            }
+        }
+
         cidadesHeader.innerHTML = `
             <h3>Técnico ${nomeTecnico}</h3>
             ${telefone ? `<div><span style="font-size: 0.85rem; background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> ${telefone}</span></div>` : ''}
-            <p>Atende a <strong>${matches.length}</strong> cidades na região.</p>
+            ${baseRegiaoHtml}
+            <p style="margin-top: 0.25rem;">Atende a <strong>${matches.length}</strong> cidades na região.</p>
         `;
 
         cidadesList.innerHTML = matches.map(m => `
@@ -911,33 +995,19 @@ function renderResults(options) {
     `;
 
     // Table
-    const MAX_DAYS = Math.max(...options.map(o => o.days), 15); // for progress bar calculation
 
-    options.forEach((opt, index) => {
-        const tr = document.createElement('tr');
+    // Popular Tabela
+    const resultsTableBody = document.querySelector('#results-table tbody');
+    resultsTableBody.innerHTML = '';
 
-        let rowClass = "";
-        let pbClass = "pb-success";
+    // Configuração de Ordenação Global para a tabela atual
+    window.currentTableSort = { column: 'prazo', asc: true };
 
-        if (index === 0) {
-            rowClass = "row-success";
-        } else if (opt.days > bestOption.days * 1.5) {
-            rowClass = "row-warning";
-            // The original MAX_DAYS calculation and progress bar rendering logic is being replaced/removed by the new sorting logic.
-            // The new logic will handle rendering the table rows and sorting.
-
-            // Popular Tabela
-            const resultsTableBody = document.querySelector('#results-table tbody');
-            resultsTableBody.innerHTML = '';
-
-            // Configuração de Ordenação Global para a tabela atual
-            window.currentTableSort = { column: 'prazo', asc: true };
-
-            const renderTableRows = (sortedOptions) => {
-                resultsTableBody.innerHTML = '';
-                sortedOptions.forEach(opt => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
+    const renderTableRows = (sortedOptions) => {
+        resultsTableBody.innerHTML = '';
+        sortedOptions.forEach(opt => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
                 <td style="font-weight: 500;">
                     ${formatProviderName(opt.provider)}
                     ${opt.provider === bestOption.provider ? ' <span title="Recomendado" style="font-size:1.1rem">✨</span>' : ''}
@@ -946,171 +1016,48 @@ function renderResults(options) {
                     <span class="time-badge">${opt.days} ${opt.days === 1 ? 'dia' : 'dias'}</span>
                 </td>
             `;
-                    resultsTableBody.appendChild(tr);
-                });
-            };
+            resultsTableBody.appendChild(tr);
+        });
+    };
 
-            // Render inicial
-            // Default sort by Prazo (asc)
-            const sortedInit = [...options].sort((a, b) => a.days - b.days);
-            renderTableRows(sortedInit);
+    // Render inicial
+    // Default sort by Prazo (asc)
+    const sortedInit = [...options].sort((a, b) => a.days - b.days);
+    renderTableRows(sortedInit);
 
-            // Adiciona listener de clique nos headers da tabela para ordenação
-            const theadTr = document.querySelector('#results-table thead tr');
-            theadTr.innerHTML = `
+    // Adiciona listener de clique nos headers da tabela para ordenação
+    const theadTr = document.querySelector('#results-table thead tr');
+    theadTr.innerHTML = `
         <th data-sort="provider" style="cursor: pointer; user-select: none;" title="Ordenar por Transportadora">Transportadora <span class="sort-icon"></span></th>
         <th data-sort="days" style="cursor: pointer; user-select: none;" title="Ordenar por Prazo">Prazo <span class="sort-icon">🔼</span></th>
     `;
 
-            theadTr.querySelectorAll('th').forEach(th => {
-                th.addEventListener('click', () => {
-                    const column = th.getAttribute('data-sort');
-                    if (window.currentTableSort.column === column) {
-                        window.currentTableSort.asc = !window.currentTableSort.asc;
-                    } else {
-                        window.currentTableSort.column = column;
-                        window.currentTableSort.asc = true; // default asc on new column
-                    }
+    theadTr.querySelectorAll('th').forEach(th => {
+        th.addEventListener('click', () => {
+            const column = th.getAttribute('data-sort');
+            if (window.currentTableSort.column === column) {
+                window.currentTableSort.asc = !window.currentTableSort.asc;
+            } else {
+                window.currentTableSort.column = column;
+                window.currentTableSort.asc = true; // default asc on new column
+            }
 
-                    // Atualiza ícones
-                    theadTr.querySelectorAll('.sort-icon').forEach(icon => icon.innerHTML = '');
-                    th.querySelector('.sort-icon').innerHTML = window.currentTableSort.asc ? '🔼' : '🔽';
+            // Atualiza ícones
+            theadTr.querySelectorAll('.sort-icon').forEach(icon => icon.innerHTML = '');
+            th.querySelector('.sort-icon').innerHTML = window.currentTableSort.asc ? '🔼' : '🔽';
 
-                    // Ordena os dados
-                    const newSorted = [...options].sort((a, b) => {
-                        if (column === 'days') {
-                            return window.currentTableSort.asc ? a.days - b.days : b.days - a.days;
-                        } else { // column is 'provider'
-                            return window.currentTableSort.asc ? a.provider.localeCompare(b.provider) : b.provider.localeCompare(a.provider);
-                        }
-                    });
-
-                    renderTableRows(newSorted);
-                });
-            });
-        }
-
-        function setupBatchProcessing() {
-            const batchFileInput = document.getElementById('batchFileInput');
-            const processBatchBtn = document.getElementById('processBatchBtn');
-            const statusDiv = document.getElementById('batchStatus');
-            const downloadBtn = document.getElementById('downloadBatchResult');
-
-            let processedWorkbook = null;
-
-            processBatchBtn.addEventListener('click', () => {
-                const file = batchFileInput.files[0];
-                if (!file) {
-                    statusDiv.innerText = 'Por favor, selecione um arquivo.';
-                    return;
-                }
-
-                statusDiv.innerText = 'Processando...';
-                downloadBtn.style.display = 'none';
-                processedWorkbook = null;
-
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        const data = e.target.result;
-                        const workbook = XLSX.read(data, { type: 'binary' });
-                        const sheetName = workbook.SheetNames[0];
-                        const worksheet = workbook.Sheets[sheetName];
-                        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-                        if (json.length <= 1) {
-                            statusDiv.innerText = 'Arquivo vazio ou sem dados.';
-                            return;
-                        }
-
-                        const headers = json[0];
-                        const rowsToProcess = json.slice(1); // Exclude header row
-
-                        let processedCount = 0;
-                        const batchSize = 100; // Process 100 rows at a time
-
-                        const processBatch = () => {
-                            const start = processedCount;
-                            const end = Math.min(processedCount + batchSize, rowsToProcess.length);
-
-                            for (let i = start; i < end; i++) {
-                                const row = rowsToProcess[i];
-                                const rowObject = {};
-                                headers.forEach((header, index) => {
-                                    rowObject[header] = row[index];
-                                });
-
-                                const deliveryOptions = [];
-                                for (let j = 0; j < headers.length; j++) {
-                                    const colName = headers[j];
-                                    const val = rowObject[colName];
-
-                                    const ignoreKeywords = [
-                                        'cep', 'terminal', 'cidade', 'estado', 'uf', 'região', 'regiao', 'id', 'codigo', 'origem',
-                                        'endereco', 'endereço', 'estab novo', 'nome', 'grupo', 'razao social', 'logradouro',
-                                        'bairro', 'tipo operacao', 'técnico', 'tecnico', 'melhor forma', 'melhor envio', 'prazo correios',
-                                        'empresa', 'treinamento', 'instalador', 'prospectador', 'parceiro', 'usuario', 'backup', 'cnpj', 'email', 'telefone', 'dat de'
-                                    ];
-                                    const isIgnored = ignoreKeywords.some(kw => normalizeSearch(colName).includes(normalizeSearch(kw)));
-
-                                    if (isIgnored) continue;
-
-                                    if (val !== null && val !== undefined) {
-                                        const numVal = parseInt(String(val).replace(/[^0-9]/g, ''), 10);
-                                        if (!isNaN(numVal) && String(val).trim() !== "" && numVal < 1000) {
-                                            deliveryOptions.push({
-                                                provider: colName,
-                                                days: numVal
-                                            });
-                                        }
-                                    }
-                                }
-                                deliveryOptions.sort((a, b) => a.days - b.days);
-
-                                // Add the best option to the row
-                                if (deliveryOptions.length > 0) {
-                                    rowObject['MELHOR PRAZO (DIAS)'] = deliveryOptions[0].days;
-                                    rowObject['TRANSPORTADORA MELHOR PRAZO'] = deliveryOptions[0].provider;
-                                } else {
-                                    rowObject['MELHOR PRAZO (DIAS)'] = 'N/A';
-                                    rowObject['TRANSPORTADORA MELHOR PRAZO'] = 'N/A';
-                                }
-                                // Update the original json array with the new data
-                                json[i + 1] = Object.values(rowObject);
-                            }
-
-                            processedCount += (end - start);
-                            statusDiv.innerText = `Processando: ${processedCount} / ${rowsToProcess.length}...`;
-
-                            if (processedCount < rowsToProcess.length) {
-                                setTimeout(processBatch, 0); // Next batch
-                            } else {
-                                // Finished
-                                statusDiv.innerText = 'Processamento Concluído! ✅';
-                                const newWs = XLSX.utils.aoa_to_sheet(json);
-                                const newWb = XLSX.utils.book_new();
-                                XLSX.utils.book_append_sheet(newWb, newWs, "Prazos Calculados");
-                                processedWorkbook = newWb;
-
-                                downloadBtn.style.display = 'inline-flex';
-                            }
-                        };
-
-                        setTimeout(processBatch, 50);
-
-                    } catch (err) {
-                        console.error(err);
-                        statusDiv.innerText = 'Erro ao ler o arquivo. Certifique-se de que é um CSV ou XLSX válido.';
-                    }
-                };
-
-                reader.readAsBinaryString(file);
-            });
-
-            downloadBtn.addEventListener('click', () => {
-                if (processedWorkbook) {
-                    XLSX.writeFile(processedWorkbook, "Prazos_em_Lote_Resultado.xlsx");
+            // Ordena os dados
+            const newSorted = [...options].sort((a, b) => {
+                if (column === 'days') {
+                    return window.currentTableSort.asc ? a.days - b.days : b.days - a.days;
+                } else { // column is 'provider'
+                    return window.currentTableSort.asc ? a.provider.localeCompare(b.provider) : b.provider.localeCompare(a.provider);
                 }
             });
-        }
-        setupBatchProcessing();
+
+            renderTableRows(newSorted);
+        });
+    });
+}
+
+

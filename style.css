@@ -180,10 +180,11 @@ body {
     background: #e2e8f0;
     padding: 0.5rem;
     border-radius: var(--radius-lg);
-    display: inline-flex;
+    width: 100%;
 }
 
 .tab-btn {
+    flex: 1;
     background: transparent;
     border: none;
     color: var(--text-secondary);
@@ -351,11 +352,23 @@ body {
     }
 
     .search-box {
-        flex-direction: column;
+        flex-direction: row;
+        gap: 0.25rem;
+    }
+
+    .search-box input {
+        font-size: 1rem;
+        padding: 1rem 0.5rem 1rem 2.5rem;
+    }
+
+    .search-box .search-icon {
+        left: 0.75rem;
     }
 
     .btn-primary {
-        width: 100%;
+        width: auto;
+        padding: 0 1rem;
+        font-size: 0.9rem;
     }
 }
 

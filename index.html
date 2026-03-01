@@ -59,9 +59,7 @@
                     <button class="tab-btn active" data-tab="estabelecimentos">Estabelecimentos</button>
                     <button class="tab-btn" data-tab="tecnicos">Técnicos</button>
                     <button class="tab-btn" data-tab="cidades">Cidades Atendidas</button>
-                    <button class="tab-btn" data-tab="lote"
-                        style="background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.5);">Busca em Lote
-                        ⚡</button>
+
                 </div>
 
                 <div class="search-box" style="position: relative;">
@@ -154,37 +152,7 @@
                     </div>
                 </div>
 
-                <!-- Aba 4: Busca em Lote -->
-                <div id="lote-results" class="tab-content">
-                    <div class="card" style="text-align: center; padding: 3rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="none" viewBox="0 0 24 24"
-                            stroke="var(--primary)" style="margin-bottom: 1rem;">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <h2 style="margin-bottom: 1rem;">Processamento em Lote</h2>
-                        <p
-                            style="color: var(--text-muted); margin-bottom: 2rem; max-width: 400px; margin-left: auto; margin-right: auto;">
-                            Faça o upload de uma planilha (Excel ou CSV) contendo uma coluna com CEPs, Terminais ou
-                            Cidades. O sistema devolverá o mesmo arquivo preenchido com os Prazos e Técnicos.
-                        </p>
 
-                        <label for="batch-file-input" class="btn-primary"
-                            style="cursor: pointer; display: inline-flex; justify-content: center; width: auto;">
-                            Selecionar Arquivo
-                        </label>
-                        <input type="file" id="batch-file-input" accept=".xlsx, .xls, .csv" hidden />
-
-                        <div id="batch-status"
-                            style="margin-top: 1.5rem; color: var(--accent); font-weight: 500; display: none;">
-                            Processando 0/0...
-                        </div>
-                        <button id="batch-download-btn" class="btn-primary"
-                            style="margin-top: 1rem; display: none; background: var(--accent);">
-                            Baixar Resultados
-                        </button>
-                    </div>
-                </div>
             </div>
         </main>
     </div>
