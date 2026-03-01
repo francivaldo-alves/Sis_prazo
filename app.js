@@ -10,6 +10,8 @@ const dashboard = document.getElementById('dashboard');
 const btnClear = document.getElementById('btn-clear');
 
 const estabDetailsCard = document.getElementById('estab-details');
+const highlightCards = document.getElementById('highlight-cards');
+const delayWarningContainer = document.getElementById('delay-warning-container');
 const bestMatchCard = document.getElementById('best-match-card');
 const resultsTable = document.querySelector('#results-table tbody');
 
@@ -155,23 +157,40 @@ function getColValue(row, possibleNames) {
 }
 
 function renderEstablishmentInfo(row) {
-    // Try to find known columns using heuristic variations
-    const nome = getColValue(row, ['Nome', 'Razao Social', 'Estabelecimento', 'Terminal']) || 'N/A';
+    const nome = getColValue(row, ['Nome', 'Razao Social', 'Estabelecimento']) || 'N/A';
+    const terminal = getColValue(row, ['Terminal']) || '';
     const endereco = getColValue(row, ['Endereço', 'Endereco', 'Logradouro', 'Rua']) || 'N/A';
+    const bairro = getColValue(row, ['Bairro']) || '';
     const cidade = getColValue(row, ['Cidade', 'Municipio']) || 'N/A';
     const uf = getColValue(row, ['UF', 'Estado']) || 'N/A';
     const grupo = getColValue(row, ['Grupo', 'Categoria', 'Setor', 'Rede']) || 'N/A';
     const cep = getColValue(row, ['CEP']) || 'N/A';
 
+    const tipoOperacao = getColValue(row, ['Tipo Operacao', 'Tipo de Operacao', 'Tipo Operação', 'Operacao']) || '';
+    const tecnico = getColValue(row, ['Técnico Mais Próximo', 'Tecnico Mais Proximo', 'Tecnico MAIS PROXIMO', 'Técnico']) || '';
+    const melhorEnvio = getColValue(row, ['Melhor Forma de Envio', 'Melhor Forma', 'Melhor Envio', 'Forma de Envio']) || '';
+
+    const displayName = terminal ? `${terminal} - ${nome}` : nome;
+
     estabDetailsCard.innerHTML = `
         <div class="estab-header">
-            <h3>${nome}</h3>
-            ${grupo !== 'N/A' ? `<span class="badge">${grupo}</span>` : ''}
+            <h3>${displayName}</h3>
+            <div class="badges-container">
+                ${grupo !== 'N/A' ? `<span class="badge">${grupo}</span>` : ''}
+                ${tipoOperacao ? `<span class="badge badge-op">${tipoOperacao}</span>` : ''}
+            </div>
         </div>
         <div class="estab-info-grid">
             <div class="estab-field">
                 <span class="label">Endereço</span>
-                <span class="val">${endereco} - ${cep}</span>
+                <span class="val">
+                    ${endereco}${bairro ? ' - ' + bairro : ''} - ${cep}
+                    <button class="btn-copy" onclick="copyToClipboard('${endereco}${bairro ? ' - ' + bairro : ''} - ${cep}', this)" title="Copiar Endereço">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                    </button>
+                </span>
             </div>
             <div class="estab-field">
                 <span class="label">Cidade</span>
@@ -183,13 +202,55 @@ function renderEstablishmentInfo(row) {
             </div>
         </div>
     `;
+
+    // Render Highlights
+    highlightCards.innerHTML = '';
+
+    if (melhorEnvio) {
+        highlightCards.innerHTML += `
+            <div class="highlight-card method-card">
+                <div class="highlight-icon method-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </div>
+                <div class="highlight-content">
+                    <span class="label">Melhor Forma de Envio</span>
+                    <span class="val">${melhorEnvio}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    if (tecnico && tecnico.toLowerCase() !== 'n/a') {
+        highlightCards.innerHTML += `
+            <div class="highlight-card tech-card">
+                <div class="highlight-icon tech-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                </div>
+                <div class="highlight-content">
+                    <span class="label">Técnico Mais Próximo</span>
+                    <span class="val">${tecnico}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    if (melhorEnvio || tecnico) {
+        highlightCards.style.display = 'grid';
+    } else {
+        highlightCards.style.display = 'none';
+    }
 }
 
 function analyzeDeliveryTimes(row) {
     // We ignore typical descriptive columns AND explicitly ignore the columns user mentioned
     const ignoreKeywords = [
         'cep', 'terminal', 'cidade', 'estado', 'uf', 'região', 'regiao', 'id', 'codigo', 'origem',
-        'endereco', 'endereço', 'estab novo', 'nome', 'grupo', 'razao social', 'logradouro'
+        'endereco', 'endereço', 'estab novo', 'nome', 'grupo', 'razao social', 'logradouro',
+        'bairro', 'tipo operacao', 'técnico', 'tecnico', 'melhor forma', 'melhor envio'
     ];
 
     const deliveryOptions = [];
@@ -222,6 +283,29 @@ function analyzeDeliveryTimes(row) {
     renderResults(deliveryOptions);
 }
 
+function formatProviderName(name) {
+    if (!name) return '';
+    return name.replace(/_/g, ' ');
+}
+
+function copyToClipboard(text, btnElement) {
+    navigator.clipboard.writeText(text).then(() => {
+        const originalHTML = btnElement.innerHTML;
+        btnElement.classList.add('copied');
+        btnElement.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+        `;
+        setTimeout(() => {
+            btnElement.classList.remove('copied');
+            btnElement.innerHTML = originalHTML;
+        }, 1500);
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+    });
+}
+
 function renderResults(options) {
     heroSection.classList.add('minimized');
 
@@ -238,6 +322,14 @@ function renderResults(options) {
 
     const bestOption = options[0];
 
+    // Check for delay warnings (e.g., any option taking more than 10 days)
+    const hasLongDelay = options.some(opt => opt.days > 10);
+    if (hasLongDelay) {
+        delayWarningContainer.classList.remove('hidden');
+    } else {
+        delayWarningContainer.classList.add('hidden');
+    }
+
     // Recommend Card
     bestMatchCard.innerHTML = `
         <div class="trophy-icon">
@@ -246,26 +338,47 @@ function renderResults(options) {
             </svg>
         </div>
         <h3>Menor Prazo Estimado</h3>
-        <div class="winner-name">${bestOption.provider}</div>
+        <div class="winner-name">${formatProviderName(bestOption.provider)}</div>
         <div>
             <span class="winner-time">${bestOption.days} dias</span>
         </div>
     `;
 
     // Table
+    const MAX_DAYS = Math.max(...options.map(o => o.days), 15); // for progress bar calculation
+
     options.forEach((opt, index) => {
         const tr = document.createElement('tr');
 
         let rowClass = "";
-        if (index === 0) rowClass = "row-success";
-        else if (opt.days > bestOption.days * 1.5) rowClass = "row-warning";
+        let pbClass = "pb-success";
+
+        if (index === 0) {
+            rowClass = "row-success";
+        } else if (opt.days > bestOption.days * 1.5) {
+            rowClass = "row-warning";
+            pbClass = opt.days > 10 ? "pb-error" : "pb-warning";
+        }
 
         if (rowClass) tr.classList.add(rowClass);
 
+        const widthPercentage = Math.min((opt.days / MAX_DAYS) * 100, 100).toFixed(0);
+
         tr.innerHTML = `
-            <td class="provider-name">${opt.provider}</td>
+            <td class="provider-name">
+                ${formatProviderName(opt.provider)}
+                <div class="progress-container">
+                    <div class="progress-bar ${pbClass}" style="width: 0%" data-target-width="${widthPercentage}"></div>
+                </div>
+            </td>
             <td class="time-badge">${opt.days} dias</td>
         `;
         resultsTable.appendChild(tr);
+
+        // Animate progress bar after short delay
+        setTimeout(() => {
+            const pb = tr.querySelector('.progress-bar');
+            if (pb) pb.style.width = pb.getAttribute('data-target-width') + '%';
+        }, 150);
     });
 }
