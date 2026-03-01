@@ -11,6 +11,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- SheetJS -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Leaflet.js para Mapa de Cobertura -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Heat Plugin -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -59,6 +64,7 @@
                     <button class="tab-btn active" data-tab="estabelecimentos">Estabelecimentos</button>
                     <button class="tab-btn" data-tab="tecnicos">Técnicos</button>
                     <button class="tab-btn" data-tab="cidades">Cidades Atendidas</button>
+                    <button class="tab-btn" data-tab="ranking">📊 Ranking</button>
 
                 </div>
 
@@ -115,6 +121,9 @@
                         </div>
                     </div>
 
+                    <!-- Alerta de Prazo para Analista -->
+                    <div id="alert-prazo-container" class="hidden mb-4"></div>
+
                     <div class="grid">
                         <div class="best-match-card" id="best-match-card">
                             <!-- Injetado via JS -->
@@ -145,10 +154,73 @@
                         <!-- Info like 'Técnico XYZ atende 35 cidades' -->
                     </div>
 
+                    <!-- Mapa de Cobertura -->
+                    <div id="map-section" class="hidden mb-4">
+                        <div class="map-header">
+                            <h3>Mapa de Cobertura</h3>
+                            <div style="display:flex;align-items:center;gap:0.75rem;">
+                                <div class="map-mode-toggle" id="map-mode-toggle">
+                                    <button class="map-mode-btn active" data-mode="markers"
+                                        title="Markers + Rotas">📍</button>
+                                    <button class="map-mode-btn" data-mode="heatmap" title="Mapa de Calor">🔥</button>
+                                </div>
+                                <span id="map-loading" class="map-loading hidden">Carregando mapa...</span>
+                            </div>
+                        </div>
+                        <div id="map"></div>
+                    </div>
+
                     <div class="cidades-grid-container">
                         <div class="cidades-list" id="cidades-list">
                             <!-- Cidades listadas como cartões simplificados -->
                         </div>
+                    </div>
+                </div>
+
+                <!-- Aba 4: Ranking de Técnicos -->
+                <div id="ranking-results" class="tab-content">
+                    <!-- Cards de destaque -->
+                    <div id="ranking-highlights" class="ranking-highlights mb-4"></div>
+
+                    <!-- Comparador de Técnicos -->
+                    <div id="comparador-section" class="comparador-section hidden mb-4">
+                        <div class="comparador-header">
+                            <h3>Comparador de Técnicos</h3>
+                            <div>
+                                <span id="comparador-count" class="comparador-count">0/3 selecionados</span>
+                                <button class="btn-comparar" id="btn-comparar" disabled>Comparar no Mapa</button>
+                                <button class="btn-clear-compare" id="btn-clear-compare">Limpar</button>
+                            </div>
+                        </div>
+                        <div id="comparador-chips" class="comparador-chips"></div>
+                        <div id="comparador-map-container" class="hidden">
+                            <div id="comparador-map"></div>
+                            <div id="comparador-stats" class="comparador-stats"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela do ranking -->
+                    <div class="ranking-table-container">
+                        <div class="ranking-table-header">
+                            <h3>Todos os Técnicos</h3>
+                            <div class="ranking-sort-btns">
+                                <button class="ranking-sort-btn active" data-sort="cidades">Por Cidades</button>
+                                <button class="ranking-sort-btn" data-sort="distancia">Por Distância</button>
+                                <button class="ranking-sort-btn" data-sort="regiao">Por Região</button>
+                            </div>
+                        </div>
+                        <div id="ranking-table-body" class="ranking-table-body"></div>
+                    </div>
+                </div>
+
+                <!-- Modal de Log de Alterações -->
+                <div id="changelog-modal" class="changelog-modal hidden">
+                    <div class="changelog-content">
+                        <div class="changelog-header">
+                            <h3>📋 Log de Alterações</h3>
+                            <button class="changelog-close" id="changelog-close">&times;</button>
+                        </div>
+                        <div id="changelog-body" class="changelog-body"></div>
                     </div>
                 </div>
 
